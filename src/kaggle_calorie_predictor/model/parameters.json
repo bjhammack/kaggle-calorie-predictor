@@ -6,8 +6,8 @@
     "hyperparameters": {
         "learning_rate": 1e-3,
         "epochs": 100,
-        "batch_size": 32,
-        "hidden_size": 64,
+        "batch_size": 128,
+        "hidden_size": 128,
         "input_size": 4,
         "output_size": 1,
         "criterion": "MSELoss",
