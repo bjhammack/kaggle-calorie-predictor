@@ -1,0 +1,16 @@
+{
+    "model_name": "basic_nn_v1.0",
+    "model_path": "model/saved_models/basic_nn_v1.0_250521_17-41-28.pt",
+    "task": "submission",
+    "seed": 42,
+    "hyperparameters": {
+        "learning_rate": 1e-3,
+        "epochs": 100,
+        "batch_size": 32,
+        "hidden_size": 64,
+        "input_size": 4,
+        "output_size": 1,
+        "criterion": "MSELoss",
+        "optimizer": "Adam"
+    }
+}
