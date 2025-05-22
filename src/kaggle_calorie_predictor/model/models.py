@@ -22,7 +22,6 @@ class BasicNN(nn.Module):
     def forward(self, x):
         return self.net(x)
 
-
 MODELS = {
     "basic_nn_v1.0": BasicNN,
 }
