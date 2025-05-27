@@ -35,9 +35,9 @@ def data_prep():
         "Body_Temp",
         "Intensity",
         "BMI",
-        # "Effort",
-        # "HR_per_kg",
-        # "Temp_Above_Basal",
+        "Effort",
+        "HR_per_kg",
+        "Temp_Above_Basal",
     ]
     cat_features = ["Sex"]
 
@@ -195,5 +195,5 @@ def main(version_name, submission=True):
 
 
 if __name__ == "__main__":
-    main("ensemble_v3", False)
+    main("ensemble_v4", False)
     print("Ensemble model training and submission completed.")
