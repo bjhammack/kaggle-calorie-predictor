@@ -129,9 +129,16 @@ def refine_weights(oof_cat, oof_lgb, oof_xgb, test_cat, test_lgb, test_xgb, y):
 
     print(f"Best RMSLE: {best_score:.5f}, weights: {best_weights}")
 
-    oof_blend = +0.5 * oof_cat + 0.3 * oof_lgb + 0.2 * oof_xgb
-
-    test_preds_blend = +0.5 * test_cat + 0.3 * test_lgb + 0.2 * test_xgb
+    oof_blend = (
+        best_weights[0] * oof_cat
+        + best_weights[1] * oof_lgb
+        + best_weights[2] * oof_xgb
+    )
+    test_preds_blend = (
+        best_weights[0] * test_cat
+        + best_weights[1] * test_lgb
+        + best_weights[2] * test_xgb
+    )
 
     return oof_blend, test_preds_blend, best_score
 
@@ -188,5 +195,5 @@ def main(version_name, submission=True):
 
 
 if __name__ == "__main__":
-    main("ensemble_v1", False)
+    main("ensemble_v2", False)
     print("Ensemble model training and submission completed.")
