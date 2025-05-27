@@ -2,7 +2,14 @@
 saved_models/
 checkpoints/
 logs/
-data/
+*.tsv
+*.tfevents
+test.csv
+train.csv
+sample_submission.csv
+original_train.csv
+*submission.csv
+*.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
