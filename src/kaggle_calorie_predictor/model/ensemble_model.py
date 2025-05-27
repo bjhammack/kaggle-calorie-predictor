@@ -148,7 +148,7 @@ def prediction_flattening(oof_blend, test_preds_blend, train):
     reg.fit(np.expm1(oof_blend).reshape(-1, 1), train["Calories"])
 
     final_test_preds = reg.predict(np.expm1(test_preds_blend).reshape(-1, 1))
-    return test_preds_blend
+    return final_test_preds
 
 
 def final_submission(submission_name, final_test_preds, test):
@@ -195,5 +195,5 @@ def main(version_name, submission=True):
 
 
 if __name__ == "__main__":
-    main("ensemble_v2", False)
+    main("ensemble_v3", False)
     print("Ensemble model training and submission completed.")
