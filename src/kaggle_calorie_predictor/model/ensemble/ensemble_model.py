@@ -47,7 +47,7 @@ def data_prep():
     return X, y, X_test, cat_features, train, test
 
 
-def train_ensemble(train, test, X, y, X_test, cat_features):
+def train_ensemble(train, test, X, y, X_test, cat_features, params=None):
     n_trials = 30
     kf = KFold(n_splits=5, shuffle=True, random_state=42)
     oof_cat = np.zeros(len(train))
@@ -58,12 +58,20 @@ def train_ensemble(train, test, X, y, X_test, cat_features):
     test_lgb = np.zeros(len(test))
     test_xgb = np.zeros(len(test))
 
-    print("Tuning hyperparameters for CatBoost, LightGBM, and XGBoost...")
-    catboost_params = tune_catboost_params(
-        X, y, cat_features, n_trials=n_trials, n_splits=kf.n_splits
-    )
-    lgbm_params = tune_lightgbm_params(X, y, n_trials=n_trials, n_splits=kf.n_splits)
-    xgb_params = tune_xgboost_params(X, y, n_trials=n_trials, n_splits=kf.n_splits)
+    if not params:
+        print("Tuning hyperparameters for CatBoost, LightGBM, and XGBoost...")
+        catboost_params = tune_catboost_params(
+            X, y, cat_features, n_trials=n_trials, n_splits=kf.n_splits
+        )
+        lgbm_params = tune_lightgbm_params(
+            X, y, n_trials=n_trials, n_splits=kf.n_splits
+        )
+        xgb_params = tune_xgboost_params(X, y, n_trials=n_trials, n_splits=kf.n_splits)
+    else:
+        print("Using provided hyperparameters for CatBoost, LightGBM, and XGBoost...")
+        catboost_params = params.get("catboost", {})
+        lgbm_params = params.get("lightgbm", {})
+        xgb_params = params.get("xgboost", {})
 
     for fold, (train_idx, val_idx) in enumerate(kf.split(X)):
         print(f"Fold {fold + 1}/{kf.n_splits}")
@@ -113,7 +121,16 @@ def train_ensemble(train, test, X, y, X_test, cat_features):
     return oof_cat, oof_lgb, oof_xgb, test_cat, test_lgb, test_xgb
 
 
-def refine_weights(oof_cat, oof_lgb, oof_xgb, test_cat, test_lgb, test_xgb, y):
+def refine_weights(
+    oof_cat, oof_lgb, oof_xgb, test_cat, test_lgb, test_xgb, y, weights=None
+):
+    if weights:
+        oof_blend = weights[0] * oof_cat + weights[1] * oof_lgb + weights[2] * oof_xgb
+        test_preds_blend = (
+            weights[0] * test_cat + weights[1] * test_lgb + weights[2] * test_xgb
+        )
+        return oof_blend, test_preds_blend, 0
+
     best_score = float("inf")
     best_weights = None
 
@@ -174,26 +191,56 @@ def update_model_results(version_name, best_rmsle):
         [{"version": version_name, "rmsle": best_rmsle, "date": pd.Timestamp.now()}]
     )
 
-    # Concatenate and save
     results = pd.concat([results, new_result], ignore_index=True)
     results = results.sort_values(by="rmsle")
     results.to_csv(path, index=False)
 
 
-def main(version_name, submission=True):
+def main(version_name, submission=True, flatten=True, params=None, weights=None):
     X, y, X_test, cat_features, train, test = data_prep()
     oof_cat, oof_lgb, oof_xgb, test_cat, test_lgb, test_xgb = train_ensemble(
-        train, test, X, y, X_test, cat_features
+        train, test, X, y, X_test, cat_features, params
     )
     oof_blend, test_preds_blend, best_rmsle = refine_weights(
-        oof_cat, oof_lgb, oof_xgb, test_cat, test_lgb, test_xgb, y
+        oof_cat, oof_lgb, oof_xgb, test_cat, test_lgb, test_xgb, y, weights=weights
     )
-    final_test_preds = prediction_flattening(oof_blend, test_preds_blend, train)
+    if flatten:
+        print("Flattening predictions...")
+        final_test_preds = prediction_flattening(oof_blend, test_preds_blend, train)
+    else:
+        final_test_preds = np.expm1(test_preds_blend)
     update_model_results(version_name, best_rmsle)
     if submission:
         final_submission(version_name, final_test_preds, test)
 
 
 if __name__ == "__main__":
-    main("ensemble_v5", True)
+    # Params derived from v5.0 tuning
+    params = {
+        "catboost": {
+            "learning_rate": 0.06904121457534679,
+            "depth": 8,
+            "l2_leaf_reg": 4.960537520975144,
+            "bagging_temperature": 0.8904191667293382,
+            "random_strength": 0.236109191972172,
+        },
+        "lightgbm": {
+            "learning_rate": 0.07775570006730576,
+            "max_depth": 8,
+            "subsample": 0.9040940691720599,
+            "colsample_bytree": 0.7558921280230523,
+            "reg_alpha": 2.1429962510359104,
+            "reg_lambda": 6.856612240264315,
+        },
+        "xgboost": {
+            "learning_rate": 0.01175007413185071,
+            "max_depth": 8,
+            "subsample": 0.7021934347116444,
+            "colsample_bytree": 0.7067932141581016,
+            "reg_alpha": 0.7062472450798777,
+            "reg_lambda": 2.2446297066331944,
+        },
+    }
+    weights = (0.5, 0.3, 0.2)  # Initial weights for blending
+    main("ensemble_v5.1", submission=True, flatten=False, params=params, weights=None)
     print("Ensemble model training and submission completed.")
