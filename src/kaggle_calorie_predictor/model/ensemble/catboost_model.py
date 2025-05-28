@@ -91,6 +91,7 @@ def train_catboost_fold(
             "early_stopping_rounds": 50,
             "verbose": 0,
         }
+    params["verbose"] = 0
 
     # Pools
     cat_train = Pool(X_train, y_train, cat_features=cat_features)
