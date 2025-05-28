@@ -95,4 +95,4 @@ def train_lightgbm_fold(
     oof_lgb[val_idx] = model.predict(X_val)
     test_lgb += model.predict(X_test) / kf_n_splits
 
-    return oof_lgb, test_lgb
+    return oof_lgb, test_lgb, model

@@ -95,4 +95,4 @@ def train_xgboost_fold(
     oof_xgb[val_idx] = model.predict(X_val)
     test_xgb += model.predict(X_test) / kf_n_splits
 
-    return oof_xgb, test_xgb
+    return oof_xgb, test_xgb, model

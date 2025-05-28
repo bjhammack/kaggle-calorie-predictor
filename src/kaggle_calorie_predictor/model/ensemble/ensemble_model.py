@@ -9,6 +9,10 @@ from sklearn.linear_model import LinearRegression
 from tqdm import tqdm
 from model.ensemble.params import PARAMS
 from model.ensemble.weights import WEIGHTS
+import matplotlib.pyplot as plt
+import shap
+from catboost import Pool
+from pathlib import Path
 
 
 def data_prep():
@@ -23,6 +27,10 @@ def data_prep():
         df["Temp_Above_Basal"] = (
             df["Body_Temp"] - 37.0
         )  # Assuming 37.0 is the basal body temperature
+        df["HR_by_Age"] = df["Heart_Rate"] / df["Age"]
+        df["Temp_Increase_Rate"] = df["Body_Temp"] / df["Duration"]
+        df["Heat_Generation"] = df["Duration"] * df["Temp_Above_Basal"]
+        df["Effort_by_BMI"] = df["Effort"] / df["BMI"]
 
     sex_map = {val: idx for idx, val in enumerate(train["Sex"].unique())}
     train["Sex"] = train["Sex"].map(sex_map)
@@ -38,9 +46,13 @@ def data_prep():
         "Body_Temp",
         "Intensity",
         "BMI",
-        # "Effort",
-        # "HR_per_kg",
-        # "Temp_Above_Basal",
+        "Effort",
+        "HR_per_kg",
+        "Temp_Above_Basal",
+        "HR_by_Age",
+        "Temp_Increase_Rate",
+        "Heat_Generation",
+        "Effort_by_BMI",
     ]
     cat_features = ["Sex"]
 
@@ -91,8 +103,9 @@ def train_ensemble(
         X_train, X_val = X.iloc[train_idx], X.iloc[val_idx]
         y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
 
+        trained_models = []
         if "catboost" in models or not models:
-            oof_cat, test_cat = train_catboost_fold(
+            oof_cat, test_cat, cat_model = train_catboost_fold(
                 X_train,
                 y_train,
                 X_val,
@@ -105,8 +118,9 @@ def train_ensemble(
                 kf_n_splits=kf.n_splits,
                 params=catboost_params,
             )
+            trained_models.append(cat_model)
         if "lightgbm" in models or not models:
-            oof_lgb, test_lgb = train_lightgbm_fold(
+            oof_lgb, test_lgb, lgb_model = train_lightgbm_fold(
                 X_train,
                 y_train,
                 X_val,
@@ -119,8 +133,9 @@ def train_ensemble(
                 fold=fold,
                 params=lgbm_params,
             )
+            trained_models.append(lgb_model)
         if "xgboost" in models or not models:
-            oof_xgb, test_xgb = train_xgboost_fold(
+            oof_xgb, test_xgb, xgb_model = train_xgboost_fold(
                 X_train,
                 y_train,
                 X_val,
@@ -133,8 +148,9 @@ def train_ensemble(
                 fold=fold,
                 params=xgb_params,
             )
+            trained_models.append(xgb_model)
 
-    return oof_cat, oof_lgb, oof_xgb, test_cat, test_lgb, test_xgb
+    return oof_cat, oof_lgb, oof_xgb, test_cat, test_lgb, test_xgb, trained_models
 
 
 def refine_weights(
@@ -213,12 +229,53 @@ def update_model_results(version_name, best_rmsle):
     results.to_csv(path, index=False)
 
 
+def analyze_feature_importance(
+    models, trained_models, X, y, cat_features, version_name
+):
+    print("[🔍] Analyzing feature importance...")
+    output_dir = Path(f"model/ensemble/feature_analysis/{version_name}")
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    for model_name, model in zip(models, trained_models):
+        shap_values = model.get_feature_importance(
+            type="ShapValues", data=Pool(X, label=y, cat_features=cat_features)
+        )
+
+        shap.summary_plot(shap_values[:, :-1], X, show=False, plot_size=(10, 6))
+        summary_path = output_dir / f"{model_name}_shap_summary.png"
+        plt.savefig(summary_path, bbox_inches="tight")
+        plt.clf()
+
+        mean_abs_shap = np.abs(shap_values[:, :-1]).mean(axis=0)
+        feature_names = X.columns
+
+        shap_df = pd.DataFrame(
+            {"feature": feature_names, "mean_abs_shap": mean_abs_shap}
+        ).sort_values(by="mean_abs_shap", ascending=False)
+
+        shap_df.plot.barh(x="feature", y="mean_abs_shap", figsize=(8, 6), legend=False)
+        plt.title(f"{model_name} - Mean Absolute SHAP Value per Feature")
+        plt.gca().invert_yaxis()
+
+        bar_path = output_dir / f"{model_name}_shap_bar.png"
+        plt.savefig(bar_path, bbox_inches="tight")
+        plt.clf()
+
+        print(f"[📂] Saved feature importance analysis to {output_dir}.")
+
+
 def main(
-    version_name, submission=True, flatten=True, params=None, weights=None, models=None
+    version_name,
+    submission=True,
+    flatten=True,
+    params=None,
+    weights=None,
+    models=None,
+    feature_importance=False,
 ):
     X, y, X_test, cat_features, train, test = data_prep()
-    oof_cat, oof_lgb, oof_xgb, test_cat, test_lgb, test_xgb = train_ensemble(
-        train, test, X, y, X_test, cat_features, params, models
+    oof_cat, oof_lgb, oof_xgb, test_cat, test_lgb, test_xgb, trained_models = (
+        train_ensemble(train, test, X, y, X_test, cat_features, params, models)
     )
     oof_blend, test_preds_blend, best_rmsle = refine_weights(
         oof_cat, oof_lgb, oof_xgb, test_cat, test_lgb, test_xgb, y, weights=weights
@@ -228,6 +285,10 @@ def main(
         final_test_preds = prediction_flattening(oof_blend, test_preds_blend, train)
     else:
         final_test_preds = np.expm1(test_preds_blend)
+    if feature_importance:
+        analyze_feature_importance(
+            models, trained_models, X, y, cat_features, version_name
+        )
     update_model_results(version_name, best_rmsle)
     if submission:
         final_submission(version_name, final_test_preds, test)
@@ -240,11 +301,12 @@ if __name__ == "__main__":
         # "xgboost",
     ]
     main(
-        "ensemble_v5.2",
+        "ensemble_v5.3",
         submission=False,
         flatten=False,
         params=PARAMS["v5.2"],
         weights=WEIGHTS["v5.2"],
         models=models,
+        feature_importance=True,
     )
     print("Ensemble model training and submission completed.")

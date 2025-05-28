@@ -105,4 +105,4 @@ def train_catboost_fold(
     oof_cat[val_idx] = model.predict(X_val)
     test_cat += model.predict(X_test) / kf_n_splits
 
-    return oof_cat, test_cat
+    return oof_cat, test_cat, model
