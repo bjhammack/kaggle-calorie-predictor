@@ -1,1 +1,2 @@
 best_rmsle,params,timestamp
+0.05993259169931927,"{'learning_rate': 0.07775570006730576, 'max_depth': 8, 'subsample': 0.9040940691720599, 'colsample_bytree': 0.7558921280230523, 'reg_alpha': 2.1429962510359104, 'reg_lambda': 6.856612240264315}",2025-05-27 21:27:59.021877

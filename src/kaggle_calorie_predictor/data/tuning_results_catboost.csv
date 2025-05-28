@@ -1,1 +1,2 @@
 best_rmsle,params,timestamp
+0.05931761607302783,"{'learning_rate': 0.06904121457534679, 'depth': 8, 'l2_leaf_reg': 4.960537520975144, 'bagging_temperature': 0.8904191667293382, 'random_strength': 0.236109191972172}",2025-05-27 21:05:45.888529
