@@ -1,11 +1,11 @@
 import pandas as pd
 import numpy as np
+from model.ensemble.catboost_model import train_catboost_fold, tune_catboost_params
+from model.ensemble.lightgbm_model import train_lightgbm_fold, tune_lightgbm_params
+from model.ensemble.xgboost_model import train_xgboost_fold, tune_xgboost_params
 from sklearn.model_selection import KFold
 from sklearn.metrics import mean_squared_log_error
 from sklearn.linear_model import LinearRegression
-from catboost import CatBoostRegressor, Pool
-from lightgbm import LGBMRegressor
-from xgboost import XGBRegressor
 
 
 def data_prep():
@@ -35,9 +35,9 @@ def data_prep():
         "Body_Temp",
         "Intensity",
         "BMI",
-        "Effort",
-        "HR_per_kg",
-        "Temp_Above_Basal",
+        # "Effort",
+        # "HR_per_kg",
+        # "Temp_Above_Basal",
     ]
     cat_features = ["Sex"]
 
@@ -48,6 +48,7 @@ def data_prep():
 
 
 def train_ensemble(train, test, X, y, X_test, cat_features):
+    n_trials = 30
     kf = KFold(n_splits=5, shuffle=True, random_state=42)
     oof_cat = np.zeros(len(train))
     oof_lgb = np.zeros(len(train))
@@ -57,56 +58,57 @@ def train_ensemble(train, test, X, y, X_test, cat_features):
     test_lgb = np.zeros(len(test))
     test_xgb = np.zeros(len(test))
 
+    print("Tuning hyperparameters for CatBoost, LightGBM, and XGBoost...")
+    catboost_params = tune_catboost_params(
+        X, y, cat_features, n_trials=n_trials, n_splits=kf.n_splits
+    )
+    lgbm_params = tune_lightgbm_params(X, y, n_trials=n_trials, n_splits=kf.n_splits)
+    xgb_params = tune_xgboost_params(X, y, n_trials=n_trials, n_splits=kf.n_splits)
+
     for fold, (train_idx, val_idx) in enumerate(kf.split(X)):
         print(f"Fold {fold + 1}/{kf.n_splits}")
         X_train, X_val = X.iloc[train_idx], X.iloc[val_idx]
         y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
 
-        cat_train = Pool(X_train, y_train, cat_features=cat_features)
-        cat_val = Pool(X_val, y_val, cat_features=cat_features)
-
-        cat_model = CatBoostRegressor(
-            iterations=1000,
-            learning_rate=0.05,
-            depth=6,
-            loss_function="RMSE",
-            eval_metric="RMSE",
-            early_stopping_rounds=50,
-            verbose=0,
+        oof_cat, test_cat = train_catboost_fold(
+            X_train,
+            y_train,
+            X_val,
+            y_val,
+            X_test,
+            cat_features,
+            val_idx,
+            oof_cat,
+            test_cat,
+            kf_n_splits=kf.n_splits,
+            params=catboost_params,
         )
-        cat_model.fit(cat_train, eval_set=cat_val)
-        oof_cat[val_idx] = cat_model.predict(X_val)
-        test_cat += cat_model.predict(X_test) / kf.n_splits
-
-        lgb_model = LGBMRegressor(
-            n_estimators=1000,
-            learning_rate=0.05,
-            max_depth=6,
-            subsample=0.8,
-            colsample_bytree=0.8,
-            random_state=fold,
-            early_stopping_rounds=50,
-            verbose=0,
-            verbosity=-1,
+        oof_lgb, test_lgb = train_lightgbm_fold(
+            X_train,
+            y_train,
+            X_val,
+            y_val,
+            X_test,
+            val_idx,
+            oof_lgb,
+            test_lgb,
+            kf_n_splits=kf.n_splits,
+            fold=fold,
+            params=lgbm_params,
         )
-        lgb_model.fit(X_train, y_train, eval_set=[(X_val, y_val)])
-        oof_lgb[val_idx] = lgb_model.predict(X_val)
-        test_lgb += lgb_model.predict(X_test) / kf.n_splits
-
-        xgb_model = XGBRegressor(
-            n_estimators=1000,
-            learning_rate=0.05,
-            max_depth=6,
-            subsample=0.8,
-            colsample_bytree=0.8,
-            random_state=fold,
-            objective="reg:squarederror",
-            early_stopping_rounds=50,
-            verbosity=0,
+        oof_xgb, test_xgb = train_xgboost_fold(
+            X_train,
+            y_train,
+            X_val,
+            y_val,
+            X_test,
+            val_idx,
+            oof_xgb,
+            test_xgb,
+            kf_n_splits=kf.n_splits,
+            fold=fold,
+            params=xgb_params,
         )
-        xgb_model.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=False)
-        oof_xgb[val_idx] = xgb_model.predict(X_val)
-        test_xgb += xgb_model.predict(X_test) / kf.n_splits
 
     return oof_cat, oof_lgb, oof_xgb, test_cat, test_lgb, test_xgb
 
@@ -163,13 +165,11 @@ def update_model_results(version_name, best_rmsle):
 
     path = Path("data/ensemble_results.csv")
 
-    # Load existing results or create empty DataFrame
     if path.exists():
         results = pd.read_csv(path)
     else:
         results = pd.DataFrame(columns=["version", "rmsle", "date"])
 
-    # Create new row
     new_result = pd.DataFrame(
         [{"version": version_name, "rmsle": best_rmsle, "date": pd.Timestamp.now()}]
     )
@@ -195,5 +195,5 @@ def main(version_name, submission=True):
 
 
 if __name__ == "__main__":
-    main("ensemble_v4", False)
+    main("ensemble_v5", True)
     print("Ensemble model training and submission completed.")
