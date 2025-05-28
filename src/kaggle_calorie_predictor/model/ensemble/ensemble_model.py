@@ -241,6 +241,8 @@ if __name__ == "__main__":
             "reg_lambda": 2.2446297066331944,
         },
     }
-    weights = (0.5, 0.3, 0.2)  # Initial weights for blending
-    main("ensemble_v5.1", submission=True, flatten=False, params=params, weights=None)
+    weights = (1.0, 0.0, 0.0)  # Predefined weights for blending
+    main(
+        "ensemble_v5.2", submission=True, flatten=False, params=params, weights=weights
+    )
     print("Ensemble model training and submission completed.")
