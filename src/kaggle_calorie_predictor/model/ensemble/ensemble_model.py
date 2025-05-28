@@ -6,6 +6,7 @@ from model.ensemble.xgboost_model import train_xgboost_fold, tune_xgboost_params
 from sklearn.model_selection import KFold
 from sklearn.metrics import mean_squared_log_error
 from sklearn.linear_model import LinearRegression
+from tqdm import tqdm
 
 
 def data_prep():
@@ -47,7 +48,16 @@ def data_prep():
     return X, y, X_test, cat_features, train, test
 
 
-def train_ensemble(train, test, X, y, X_test, cat_features, params=None):
+def train_ensemble(
+    train,
+    test,
+    X,
+    y,
+    X_test,
+    cat_features,
+    params=None,
+    models=None,
+):
     n_trials = 30
     kf = KFold(n_splits=5, shuffle=True, random_state=42)
     oof_cat = np.zeros(len(train))
@@ -73,50 +83,54 @@ def train_ensemble(train, test, X, y, X_test, cat_features, params=None):
         lgbm_params = params.get("lightgbm", {})
         xgb_params = params.get("xgboost", {})
 
-    for fold, (train_idx, val_idx) in enumerate(kf.split(X)):
-        print(f"Fold {fold + 1}/{kf.n_splits}")
+    for fold, (train_idx, val_idx) in tqdm(
+        enumerate(kf.split(X)), total=kf.get_n_splits(X)
+    ):
         X_train, X_val = X.iloc[train_idx], X.iloc[val_idx]
         y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
 
-        oof_cat, test_cat = train_catboost_fold(
-            X_train,
-            y_train,
-            X_val,
-            y_val,
-            X_test,
-            cat_features,
-            val_idx,
-            oof_cat,
-            test_cat,
-            kf_n_splits=kf.n_splits,
-            params=catboost_params,
-        )
-        oof_lgb, test_lgb = train_lightgbm_fold(
-            X_train,
-            y_train,
-            X_val,
-            y_val,
-            X_test,
-            val_idx,
-            oof_lgb,
-            test_lgb,
-            kf_n_splits=kf.n_splits,
-            fold=fold,
-            params=lgbm_params,
-        )
-        oof_xgb, test_xgb = train_xgboost_fold(
-            X_train,
-            y_train,
-            X_val,
-            y_val,
-            X_test,
-            val_idx,
-            oof_xgb,
-            test_xgb,
-            kf_n_splits=kf.n_splits,
-            fold=fold,
-            params=xgb_params,
-        )
+        if "catboost" in models or not models:
+            oof_cat, test_cat = train_catboost_fold(
+                X_train,
+                y_train,
+                X_val,
+                y_val,
+                X_test,
+                cat_features,
+                val_idx,
+                oof_cat,
+                test_cat,
+                kf_n_splits=kf.n_splits,
+                params=catboost_params,
+            )
+        if "lightgbm" in models or not models:
+            oof_lgb, test_lgb = train_lightgbm_fold(
+                X_train,
+                y_train,
+                X_val,
+                y_val,
+                X_test,
+                val_idx,
+                oof_lgb,
+                test_lgb,
+                kf_n_splits=kf.n_splits,
+                fold=fold,
+                params=lgbm_params,
+            )
+        if "xgboost" in models or not models:
+            oof_xgb, test_xgb = train_xgboost_fold(
+                X_train,
+                y_train,
+                X_val,
+                y_val,
+                X_test,
+                val_idx,
+                oof_xgb,
+                test_xgb,
+                kf_n_splits=kf.n_splits,
+                fold=fold,
+                params=xgb_params,
+            )
 
     return oof_cat, oof_lgb, oof_xgb, test_cat, test_lgb, test_xgb
 
@@ -129,7 +143,8 @@ def refine_weights(
         test_preds_blend = (
             weights[0] * test_cat + weights[1] * test_lgb + weights[2] * test_xgb
         )
-        return oof_blend, test_preds_blend, 0
+        best_score = np.sqrt(mean_squared_log_error(np.expm1(y), np.expm1(oof_blend)))
+        return oof_blend, test_preds_blend, best_score
 
     best_score = float("inf")
     best_weights = None
@@ -196,10 +211,12 @@ def update_model_results(version_name, best_rmsle):
     results.to_csv(path, index=False)
 
 
-def main(version_name, submission=True, flatten=True, params=None, weights=None):
+def main(
+    version_name, submission=True, flatten=True, params=None, weights=None, models=None
+):
     X, y, X_test, cat_features, train, test = data_prep()
     oof_cat, oof_lgb, oof_xgb, test_cat, test_lgb, test_xgb = train_ensemble(
-        train, test, X, y, X_test, cat_features, params
+        train, test, X, y, X_test, cat_features, params, models
     )
     oof_blend, test_preds_blend, best_rmsle = refine_weights(
         oof_cat, oof_lgb, oof_xgb, test_cat, test_lgb, test_xgb, y, weights=weights
@@ -242,7 +259,15 @@ if __name__ == "__main__":
         },
     }
     weights = (1.0, 0.0, 0.0)  # Predefined weights for blending
+    models = [
+        "catboost",
+    ]  # "lightgbm", "xgboost"]
     main(
-        "ensemble_v5.2", submission=True, flatten=False, params=params, weights=weights
+        "ensemble_v5.2",
+        submission=False,
+        flatten=False,
+        params=params,
+        weights=weights,
+        models=models,
     )
     print("Ensemble model training and submission completed.")
