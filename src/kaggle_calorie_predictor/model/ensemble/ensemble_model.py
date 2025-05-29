@@ -39,20 +39,20 @@ def data_prep():
     features = [
         "Sex",
         "Age",
-        "Height",
+        # "Height",
         "Weight",
         "Duration",
         "Heart_Rate",
         "Body_Temp",
         "Intensity",
         "BMI",
-        "Effort",
+        # "Effort",
         "HR_per_kg",
         "Temp_Above_Basal",
         "HR_by_Age",
-        "Temp_Increase_Rate",
-        "Heat_Generation",
-        "Effort_by_BMI",
+        # "Temp_Increase_Rate",
+        # "Heat_Generation",
+        # "Effort_by_BMI",
     ]
     cat_features = ["Sex"]
 
@@ -301,12 +301,12 @@ if __name__ == "__main__":
         # "xgboost",
     ]
     main(
-        "ensemble_v5.3",
-        submission=False,
+        "ensemble_v5.4.3",
+        submission=True,
         flatten=False,
         params=PARAMS["v5.2"],
         weights=WEIGHTS["v5.2"],
         models=models,
-        feature_importance=True,
+        feature_importance=False,
     )
     print("Ensemble model training and submission completed.")
