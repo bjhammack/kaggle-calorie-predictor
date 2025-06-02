@@ -7,11 +7,11 @@ import numpy as np
 from pathlib import Path
 
 
-def tune_catboost_params(X, y, cat_features, n_trials=30, n_splits=5):
+def tune_catboost_params(X, y, cat_features, n_trials=40, n_splits=5):
     def objective(trial):
         params = {
             "iterations": 1000,
-            "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.1),
+            "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3),
             "depth": trial.suggest_int("depth", 4, 8),
             "l2_leaf_reg": trial.suggest_float("l2_leaf_reg", 1.0, 10.0),
             "bagging_temperature": trial.suggest_float("bagging_temperature", 0.0, 1.0),

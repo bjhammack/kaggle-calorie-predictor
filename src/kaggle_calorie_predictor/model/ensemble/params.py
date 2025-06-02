@@ -24,4 +24,13 @@ PARAMS = {
             "reg_lambda": 2.2446297066331944,
         },
     },
+    "v5.5": {
+        "catboost": {
+            "learning_rate": 0.14582303949773257,
+            "depth": 8,
+            "l2_leaf_reg": 8.229792271974349,
+            "bagging_temperature": 0.7118707190104757,
+            "random_strength": 0.8003231224364851,
+        },
+    },
 }

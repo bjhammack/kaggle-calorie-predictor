@@ -39,7 +39,7 @@ def data_prep():
     features = [
         "Sex",
         "Age",
-        # "Height",
+        "Height",
         "Weight",
         "Duration",
         "Heart_Rate",
@@ -47,9 +47,9 @@ def data_prep():
         "Intensity",
         "BMI",
         # "Effort",
-        "HR_per_kg",
-        "Temp_Above_Basal",
-        "HR_by_Age",
+        # "HR_per_kg",
+        # "Temp_Above_Basal",
+        # "HR_by_Age",
         # "Temp_Increase_Rate",
         # "Heat_Generation",
         # "Effort_by_BMI",
@@ -73,7 +73,7 @@ def train_ensemble(
     models=None,
 ):
     n_trials = 30
-    kf = KFold(n_splits=5, shuffle=True, random_state=42)
+    kf = KFold(n_splits=10, shuffle=True, random_state=42)
     oof_cat = np.zeros(len(train))
     oof_lgb = np.zeros(len(train))
     oof_xgb = np.zeros(len(train))
@@ -301,7 +301,7 @@ if __name__ == "__main__":
         # "xgboost",
     ]
     main(
-        "ensemble_v5.4.3",
+        "ensemble_v5.7",
         submission=True,
         flatten=False,
         params=PARAMS["v5.2"],
